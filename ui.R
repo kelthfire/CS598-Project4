@@ -5,6 +5,7 @@ library(recommenderlab)
 library(data.table)
 library(ShinyRatingInput)
 library(shinyjs)
+library(slam)
 
 source('functions/helpers.R')
 
@@ -34,8 +35,7 @@ shinyUI(
               #First tab
               tabItem(tabName = "genre",
                       fluidRow(
-                        box(width = 12, title = "Step 1: Rate as many books as possible", status = "info", solidHeader = TRUE, collapsible = TRUE,
-                            h2("Test Test"),
+                        box(width = 12, title = "Step 1: Select your favorite genre", status = "info", solidHeader = TRUE, collapsible = TRUE,
                             selectInput("genreDropdown","Select Genre",choices = genre_list )
                         )
                       ),
@@ -43,7 +43,7 @@ shinyUI(
                         useShinyjs(),
                         box(
                           width = 12, status = "info", solidHeader = TRUE,
-                          title = "Step 2: Discover books you might like",
+                          title = "Step 2: Discover movies you might like",
                           br(),
                           withBusyIndicatorUI(
                             actionButton("btnGenre", "Click here to get your recommendations", class = "btn-warning")

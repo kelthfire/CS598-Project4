@@ -8,6 +8,40 @@ get_user_ratings = function(value_list) {
   dat = dat[Rating > 0]
 }
 
+## Load the ratings data
+myurl = "https://liangfgithub.github.io/MovieData/"
+ratings = read.csv(paste0(myurl, 'ratings.dat?raw=true'), 
+                   sep = ':',
+                   colClasses = c('integer', 'NULL'), 
+                   header = FALSE)
+colnames(ratings) = c('UserID', 'MovieID', 'Rating', 'Timestamp')
+
+
+# Convert to Real Ratings Matrix
+i = paste0('u', ratings$UserID)
+j = paste0('m', ratings$MovieID)
+x = ratings$Rating
+tmp = data.frame(i, j, x, stringsAsFactors = T)
+Rmat = sparseMatrix(as.integer(tmp$i), as.integer(tmp$j), x = tmp$x)
+rownames(Rmat) = levels(tmp$i)
+colnames(Rmat) = levels(tmp$j)
+Rmat = new('realRatingMatrix', data = Rmat)
+
+# Get the recommender functions
+
+# UBCF
+rec_UBCF = Recommender(Rmat, method = 'UBCF',
+                       parameter = list(normalize = 'Z-score', 
+                                        method = 'Cosine', 
+                                        nn = 25))
+
+# Popular
+rec_popular = Recommender(Rmat, method = 'POPULAR')
+
+
+
+
+
 # read in data for loading movie info and images
 myurl = "https://liangfgithub.github.io/MovieData/"
 movies = readLines(paste0(myurl, 'movies.dat?raw=true'))
@@ -123,13 +157,52 @@ shinyServer(function(input, output, session) {
       value_list <- reactiveValuesToList(input)
       user_ratings <- get_user_ratings(value_list)
       
-      user_results = (1:10)/10
-      user_predicted_ids = 1:10
+      
+      # Create a new user
+      nm = length(unique(ratings$MovieID))
+      nur = nrow(user_ratings)
+      
+      
+      i = c(rep("u88888",nm),rep("u99999",nur))
+      j = c(paste0("m",unique(ratings$MovieID)),paste0("m", user_ratings$MovieID))
+      x = c(rep(5,nm),user_ratings$Rating)
+      tmp = data.frame(i, j, x, stringsAsFactors = T)
+      newUser = sparseMatrix(as.integer(tmp$i), as.integer(tmp$j), x = tmp$x)
+      rownames(newUser) = levels(tmp$i)
+      colnames(newUser) = levels(tmp$j)
+      newUser = new('realRatingMatrix', data = newUser)
+      
+      
+      recomUBCF = predict(rec_UBCF, 
+                      newUser[2,], type = 'ratings')
+      
+      
+      recomPOP = predict(rec_popular, 
+                       newUser[2,], type = 'ratings')
+      
+      matUBCF = as(recomUBCF, 'matrix')
+      matPOP = as(recomPOP, 'matrix')
+      final = matrix(data=NA,nrow = 1, ncol = ncol(recomUBCF))
+      
+      
+      for (it in 1:length(matUBCF)){
+        
+        final[1,it] = ifelse(is.na(matUBCF[1,it]), ifelse(is.na(matPOP[1,it]), 2.5, matPOP[1,it]), matUBCF[1,it])
+        
+      }
+      
+      colnames(final) = colnames(matUBCF)
+      
+      # Remove already rated items
+      final[1,paste0("m", user_ratings$MovieID)] = 0
+      
+      top10scores = order(final,decreasing=TRUE)[1:10]
+      
+      user_predicted_ids = as.integer(gsub("m","",colnames(final)[top10scores]))
       recom_results <- data.table(Rank = 1:10, 
                                   MovieID = movies$MovieID[user_predicted_ids], 
                                   Title = movies$Title[user_predicted_ids], 
-                                  URL = movies$image_url[user_predicted_ids],
-                                  Predicted_rating =  user_results)
+                                  URL = movies$image_url[user_predicted_ids])
       
       
     }) # still busy
